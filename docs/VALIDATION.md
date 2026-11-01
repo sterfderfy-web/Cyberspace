@@ -15,7 +15,7 @@
 | Аудит зависимостей | PASS | `npm audit`: 0 известных уязвимостей в момент проверки |
 | HTTP-cookie по LAN IP | PASS | Вход через UI; HttpOnly, SameSite=Strict, Secure=false; команда сохранения работает |
 | Адаптивная компоновка | PASS | Нет горизонтального переполнения на трёх размерах; сделаны снимки |
-| Linux / GitHub Actions | NOT TESTED локально | Workflow добавлен; удалённый результат смотрите в Checks PR |
+| Linux / GitHub Actions | PASS | [Удалённый прогон](https://github.com/sterfderfy-web/Cyberspace/actions/runs/41333347953): Ubuntu, Node.js 24.22.2, npm ci, типы, сборка, 18 тестов и 2 сценария Chromium; код `0fe30ac` |
 | ARM64 | NOT TESTED | Эта машина x64 |
 | Чистая другая Windows | NOT TESTED | Bootstrap проверен на текущей Windows с переустановкой npm-зависимостей |
 | Реальные телефон и планшет | NOT TESTED | Требуют действий владельца по RUNBOOK |
