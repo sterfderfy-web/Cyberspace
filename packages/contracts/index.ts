@@ -19,15 +19,22 @@ export interface Space {
   revision: number;
   created_at: string;
 }
-export interface Note {
+export interface SpaceObject<T extends object = Record<string, unknown>> {
   id: string;
   space_id: string;
-  type: "note";
-  schema_version: 0;
-  properties: { title: string; text: string };
+  type: string;
+  schema_version: number;
+  properties: T;
   revision: number;
   created_at: string;
   updated_at: string;
+}
+export interface Note extends SpaceObject<{ title: string; text: string }> {
+  type: "note";
+  schema_version: 0;
+}
+export function isNote(object: SpaceObject): object is Note {
+  return object.type === "note" && object.schema_version === 0;
 }
 export interface Snapshot {
   space: Space;

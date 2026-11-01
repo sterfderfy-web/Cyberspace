@@ -18,7 +18,7 @@
     "dev": "tsx watch apps/server/main.ts",
     "dev:web": "vite --config apps/web/vite.config.ts",
     "agent": "node dist/apps/demo-agent/main.js",
-    "test": "tsx --test tests/acceptance/api.test.ts tests/acceptance/process.test.ts",
+    "test": "tsx --test tests/acceptance/api.test.ts tests/acceptance/process.test.ts tests/acceptance/spatial.test.ts",
     "test:browser": "playwright test"
   },
   "dependencies": {
@@ -28,13 +28,15 @@
     "@fastify/websocket": "11.3.6",
     "fastify": "5.12.7",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "three": "0.187.0"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "@types/node": "24.10.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/three": "0.187.0",
     "@types/ws": "8.18.2",
     "prettier": "3.9.10",
     "tsx": "4.23.15",

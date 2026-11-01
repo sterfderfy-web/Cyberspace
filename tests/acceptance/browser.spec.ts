@@ -117,7 +117,10 @@ test("A01–A03, A05, A07–A12: браузеры, LAN HTTP, конфликт, �
         action: "update_note",
         object_id: current.id,
         expected_revision: current.revision,
-        input: { title: current.properties.title, text: `Синхронизация ${i}` },
+        input: {
+          title: String(current.properties.title),
+          text: `Синхронизация ${i}`,
+        },
       };
       expect(
         (
