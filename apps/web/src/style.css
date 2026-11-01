@@ -1,0 +1,625 @@
+* {
+  box-sizing: border-box;
+}
+:root {
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  color: #183237;
+  background: #f4f5f1;
+  font-synthesis: none;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button,
+.file-button {
+  border: 1px solid #cdd6d0;
+  background: #fff;
+  color: #21464b;
+  border-radius: 7px;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 44px;
+}
+button:hover,
+.file-button:hover {
+  background: #edf3ee;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.primary {
+  background: #176c5d;
+  color: white;
+  border-color: #176c5d;
+}
+button.primary:hover {
+  background: #125448;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid #d8a94d;
+  outline-offset: 3px;
+}
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+h1 {
+  font-size: 32px;
+  letter-spacing: -1px;
+  margin-bottom: 10px;
+}
+h2 {
+  font-size: 19px;
+}
+p {
+  line-height: 1.6;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+input,
+textarea,
+select {
+  border: 1px solid #ced9d3;
+  background: #fff;
+  color: #183237;
+  padding: 12px;
+  border-radius: 6px;
+  width: 100%;
+  min-width: 0;
+}
+textarea {
+  resize: vertical;
+  min-height: 300px;
+  line-height: 1.65;
+}
+input[readonly],
+textarea[readonly] {
+  background: #f7f8f5;
+}
+small {
+  font-size: 12px;
+}
+.muted,
+.fine {
+  color: #657873;
+  font-weight: 400;
+}
+.fine {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.eyebrow {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 2px;
+  color: #637c72;
+  margin-bottom: 12px;
+}
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  border: 1px solid #77998d;
+  border-radius: 4px;
+  padding: 5px 9px;
+}
+.login {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  background: #102a30;
+  color: #f2f4e9;
+  padding: 9vw;
+  gap: 7vw;
+  align-items: center;
+}
+.login h1 {
+  font-size: clamp(30px, 4vw, 55px);
+  line-height: 1.15;
+  letter-spacing: -2px;
+}
+.login-intro p {
+  color: #a9c3ba;
+  max-width: 400px;
+}
+.login .eyebrow {
+  color: #97c4ae;
+  margin-bottom: 32px;
+}
+.login-card {
+  padding: 36px;
+  background: #f4f5f1;
+  color: #183237;
+  border-radius: 12px;
+  display: grid;
+  gap: 20px;
+}
+.login-card h2,
+.login-card p {
+  margin: 0;
+}
+.login-card .primary {
+  width: 100%;
+}
+header {
+  background: #102a30;
+  color: #e2efe5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 17px 30px;
+  gap: 20px;
+}
+.brand {
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 25px;
+}
+.brand span {
+  font-size: 14px;
+  letter-spacing: 3px;
+  font-weight: 700;
+}
+.header-right {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  font-size: 12px;
+}
+.header-right button {
+  background: transparent;
+  color: #d7e6df;
+  border-color: #486460;
+  padding: 5px 12px;
+}
+.connection {
+  color: #e6bd6e;
+}
+.connection.online {
+  color: #9edab4;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  min-height: calc(100vh - 121px);
+}
+aside {
+  padding: 32px 20px;
+  border-right: 1px solid #d7dfd8;
+  background: #eaf0e9;
+  display: flex;
+  flex-direction: column;
+}
+.space-label {
+  font-size: 11px;
+  color: #62796f;
+}
+.space-label select {
+  font-size: 17px;
+  font-weight: 700;
+  background: transparent;
+  padding: 8px;
+  border-color: transparent;
+}
+nav {
+  display: grid;
+  gap: 8px;
+  margin-top: 32px;
+}
+nav button {
+  border: 0;
+  text-align: left;
+  background: transparent;
+  font-size: 13px;
+}
+nav button span {
+  float: right;
+}
+nav button.active {
+  background: #d4e3d8;
+  color: #175d4d;
+}
+.aside-bottom {
+  margin-top: auto;
+  padding-top: 60px;
+  font-size: 12px;
+  color: #587368;
+}
+.aside-bottom p {
+  margin: 10px 0 15px;
+}
+.content {
+  padding: 34px;
+  min-width: 0;
+}
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 28px;
+}
+.page-heading p {
+  font-size: 12px;
+  margin-bottom: 0;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.actions button,
+.file-button {
+  font-size: 12px;
+}
+.file-button {
+  display: inline-flex;
+  justify-content: center;
+}
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.file-button:focus-within {
+  outline: 3px solid #d8a94d;
+}
+.notes-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+}
+.note-list,
+.editor,
+.card {
+  border: 1px solid #d7dfd8;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.section-heading h2,
+.section-heading .eyebrow {
+  margin: 0;
+}
+.section-heading .muted {
+  font-size: 11px;
+}
+.note-list .section-heading {
+  padding: 18px 16px 0;
+}
+.note-list .section-heading button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.note-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid #edf0eb;
+  padding: 18px 20px;
+  background: #fff;
+}
+.note-item.selected {
+  background: #e7f2e9;
+  border-left: 3px solid #247a61;
+  padding-left: 17px;
+}
+.note-item strong {
+  display: block;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.note-item span {
+  display: block;
+  color: #6c8076;
+  font-weight: 400;
+  font-size: 12px;
+  margin: 8px 0 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-item small {
+  color: #688574;
+  font-weight: 400;
+}
+.empty {
+  padding: 20px;
+  color: #819085;
+  font-size: 13px;
+}
+.editor {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.editor .section-heading {
+  margin-bottom: 6px;
+}
+.editor label {
+  color: #60766a;
+}
+.editor input {
+  font-size: 21px;
+  font-weight: 600;
+}
+.editor textarea {
+  flex: 1;
+}
+.editor-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  align-items: center;
+}
+.editor-footer .muted {
+  font-size: 11px;
+}
+.editor-empty {
+  padding: 85px 20px;
+  text-align: center;
+  color: #6b8276;
+}
+.editor-empty h2 {
+  color: #274b3c;
+}
+.editor-empty p {
+  font-size: 13px;
+}
+.large-symbol {
+  font-size: 50px;
+  display: block;
+  margin-bottom: 20px;
+  color: #95b6a3;
+}
+.error,
+.warning {
+  padding: 14px 18px;
+  border-radius: 7px;
+  line-height: 1.5;
+  font-size: 13px;
+  margin: 0 0 18px;
+  overflow-wrap: anywhere;
+}
+.error {
+  background: #fae9e3;
+  color: #9c3821;
+}
+.warning {
+  background: #fff3d5;
+  color: #796023;
+}
+.save-status {
+  font-size: 13px;
+  color: #226b51;
+}
+.card {
+  padding: 28px;
+}
+.permission-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid #e2e9e1;
+  padding: 23px 0;
+}
+.permission-row small {
+  display: block;
+  color: #6e8475;
+  margin-top: 6px;
+}
+.permissions {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.permissions label {
+  flex-direction: row;
+  align-items: center;
+  font-size: 12px;
+  min-height: 44px;
+}
+.permissions input {
+  width: 18px;
+  height: 18px;
+  accent-color: #176c5d;
+}
+.table-scroll {
+  overflow: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  text-align: left;
+}
+th {
+  color: #708775;
+  font-size: 11px;
+}
+td,
+th {
+  padding: 14px 12px;
+  border-bottom: 1px solid #e6ebe3;
+  white-space: nowrap;
+}
+footer {
+  border-top: 1px solid #d7dfd8;
+  display: flex;
+  justify-content: space-between;
+  padding: 15px 30px;
+  font-size: 10px;
+  color: #748678;
+  letter-spacing: 0.5px;
+}
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: 190px 1fr;
+  }
+  .content {
+    padding: 24px;
+  }
+  .notes-layout {
+    grid-template-columns: 210px 1fr;
+  }
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .permission-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .editor-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (max-width: 760px) {
+  .login {
+    grid-template-columns: 1fr;
+    padding: 30px 20px;
+    gap: 30px;
+  }
+  .login-card {
+    padding: 24px;
+  }
+  .login h1 {
+    font-size: 36px;
+  }
+  header {
+    padding: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .header-right {
+    gap: 12px;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .workspace {
+    display: block;
+  }
+  aside {
+    padding: 18px;
+    border-right: 0;
+    border-bottom: 1px solid #d7dfd8;
+  }
+  aside > .eyebrow,
+  .aside-bottom {
+    display: none;
+  }
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    gap: 3px;
+  }
+  nav button {
+    font-size: 12px;
+    padding: 10px;
+  }
+  .space-label {
+    max-width: 100%;
+  }
+  .content {
+    padding: 22px 16px;
+  }
+  .page-heading {
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: 27px;
+  }
+  .notes-layout {
+    grid-template-columns: 1fr;
+  }
+  .note-list {
+    max-height: 290px;
+    overflow: auto;
+  }
+  .editor {
+    padding: 18px;
+  }
+  .editor-empty {
+    padding: 35px 10px;
+  }
+  .editor textarea {
+    min-height: 260px;
+  }
+  .editor-footer .actions {
+    width: 100%;
+  }
+  .editor-footer button.primary {
+    flex: 1;
+  }
+  .section-heading {
+    flex-wrap: wrap;
+  }
+  .card {
+    padding: 18px;
+  }
+  .permissions {
+    gap: 12px;
+  }
+  .permission-row {
+    gap: 10px;
+  }
+  footer {
+    padding: 15px 16px;
+    gap: 15px;
+    font-size: 9px;
+  }
+}
+
+@media (min-width: 761px) {
+  .note-list {
+    max-height: 680px;
+    overflow: auto;
+  }
+  .editor {
+    min-height: 600px;
+  }
+  .notes-layout {
+    align-items: start;
+  }
+}
+nav button span {
+  margin-left: 8px;
+}
