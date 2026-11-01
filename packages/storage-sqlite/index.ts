@@ -9,10 +9,12 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import type { Repository } from "../core/index.js";
+import { prepareMigration, migrateToV2 } from "./migrations.js";
+import type { SpatialView } from "../contracts/spatial.js";
 import type {
   Actor,
   Audit,
-  Note,
+  SpaceObject,
   Permission,
   Session,
   Space,
@@ -26,6 +28,12 @@ export class SqliteRepository implements Repository {
   constructor(path: string) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
+    try {
+      prepareMigration(this.db, path);
+    } catch (e) {
+      this.db.close();
+      throw e;
+    }
     this.db
       .exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS migrations(version INTEGER PRIMARY KEY);
@@ -40,6 +48,12 @@ export class SqliteRepository implements Repository {
       CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, space_id TEXT, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS audit_space ON audit(space_id,id);
       INSERT OR IGNORE INTO migrations(version) VALUES(1);`);
+    try {
+      migrateToV2(this.db);
+    } catch (e) {
+      this.db.close();
+      throw e;
+    }
   }
   close() {
     this.db.close();
@@ -77,19 +91,54 @@ export class SqliteRepository implements Repository {
     return this.db
       .prepare("SELECT data FROM objects WHERE space_id=? ORDER BY rowid")
       .all(id)
-      .map((r) => parse<Note>(r)!);
+      .map((r) => parse<SpaceObject>(r)!);
   }
   object(id: string) {
-    return parse<Note>(
+    return parse<SpaceObject>(
       this.db.prepare("SELECT data FROM objects WHERE id=?").get(id),
     );
   }
-  saveObject(n: Note) {
+  saveObject(n: SpaceObject) {
     this.db
       .prepare(
         "INSERT INTO objects VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
       )
       .run(n.id, n.space_id, JSON.stringify(n));
+  }
+  views(space: string) {
+    return this.db
+      .prepare("SELECT data FROM views WHERE space_id=? ORDER BY rowid")
+      .all(space)
+      .map((r) => parse<SpatialView>(r)!);
+  }
+  view(id: string) {
+    return parse<SpatialView>(
+      this.db.prepare("SELECT data FROM views WHERE id=?").get(id),
+    );
+  }
+  saveView(v: SpatialView) {
+    this.db
+      .prepare(
+        "INSERT INTO views VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET parent_view_id=excluded.parent_view_id,data=excluded.data",
+      )
+      .run(v.id, v.space_id, v.object_id, v.parent_view_id, JSON.stringify(v));
+  }
+  deleteView(id: string) {
+    this.db.prepare("DELETE FROM views WHERE id=?").run(id);
+  }
+  sceneRevision(space: string) {
+    return Number(
+      this.db.prepare("SELECT revision FROM scenes WHERE space_id=?").get(space)
+        ?.revision ?? 0,
+    );
+  }
+  bumpScene(space: string) {
+    this.db
+      .prepare(
+        "INSERT INTO scenes VALUES(?,1) ON CONFLICT(space_id) DO UPDATE SET revision=revision+1",
+      )
+      .run(space);
+    return this.sceneRevision(space);
   }
   actor(id: string) {
     return parse<Actor>(

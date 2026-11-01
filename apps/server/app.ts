@@ -9,15 +9,22 @@ import { resolve } from "node:path";
 import { Core, DomainError, type Identity } from "../../packages/core/index.js";
 import { SqliteRepository } from "../../packages/storage-sqlite/index.js";
 import {
-  actionSchema,
   grantSchema,
   importSchema,
   loginSchema,
-  type Command,
   type ExportData,
   type Grant,
 } from "../../packages/contracts/index.js";
 import { notesModule } from "../../packages/module-notes/index.js";
+import {
+  spatialModule,
+  panelRenderers,
+} from "../../packages/module-spatial/index.js";
+import type {
+  ModuleDefinition,
+  ModuleCommand,
+} from "../../packages/contracts/modules.js";
+import type { RendererDescriptor } from "../../packages/contracts/spatial.js";
 export interface ServerOptions {
   db: string;
   origins: string[];
@@ -26,10 +33,22 @@ export interface ServerOptions {
   maxConnections?: number;
   heartbeatMs?: number;
   maxBufferedBytes?: number;
+  extraModules?: ModuleDefinition[];
+  extraRenderers?: RendererDescriptor[];
 }
 export async function createServer(options: ServerOptions) {
+  const renderers = [...panelRenderers, ...(options.extraRenderers ?? [])];
+  if (
+    new Set(renderers.map((r) => r.id + ":" + r.version)).size !==
+    renderers.length
+  )
+    throw new Error("Повтор визуализатора");
   const repo = new SqliteRepository(options.db),
-    core = new Core(repo);
+    core = new Core(repo, [
+      notesModule,
+      spatialModule(renderers),
+      ...(options.extraModules ?? []),
+    ]);
   const app = Fastify({
     bodyLimit: 128 * 1024,
     logger: false,
@@ -146,22 +165,20 @@ export async function createServer(options: ServerOptions) {
       typeof candidate === "string" && /^[0-9a-f-]{36}$/i.test(candidate)
         ? candidate
         : undefined;
-    reply
-      .code(status)
-      .send({
-        request_id,
-        code,
-        message:
-          error instanceof DomainError
-            ? error.message
-            : status === 500
-              ? "Внутренняя ошибка сервера"
-              : status === 429
-                ? "Слишком много запросов. Подождите минуту"
-                : status === 413
-                  ? "Превышен размер запроса"
-                  : "Некорректный запрос",
-      });
+    reply.code(status).send({
+      request_id,
+      code,
+      message:
+        error instanceof DomainError
+          ? error.message
+          : status === 500
+            ? "Внутренняя ошибка сервера"
+            : status === 429
+              ? "Слишком много запросов. Подождите минуту"
+              : status === 413
+                ? "Превышен размер запроса"
+                : "Некорректный запрос",
+    });
   });
   app.post<{
     Body: { actor_id: string; secret: string; mode: "browser" | "agent" };
@@ -230,12 +247,22 @@ export async function createServer(options: ServerOptions) {
     "/api/v0/spaces/:id/modules",
     async (req) => {
       core.access(auth(req), req.params.id);
-      return [notesModule];
+      return core.modules.declarations();
     },
   );
-  app.post<{ Params: { id: string }; Body: Command }>(
+  app.get<{ Params: { id: string } }>("/api/v0/spaces/:id/scene", async (req) =>
+    core.scene(auth(req), req.params.id),
+  );
+  app.get<{ Params: { id: string } }>(
+    "/api/v0/spaces/:id/renderers",
+    async (req) => {
+      core.access(auth(req), req.params.id);
+      return renderers;
+    },
+  );
+  app.post<{ Params: { id: string }; Body: ModuleCommand }>(
     "/api/v0/spaces/:id/actions",
-    { schema: { body: actionSchema } },
+    { schema: { body: core.modules.schemas() } },
     async (req) => {
       const result = core.command(auth(req), req.params.id, req.body);
       publish(req.params.id);
@@ -246,12 +273,10 @@ export async function createServer(options: ServerOptions) {
     "/api/v0/spaces/:id/permissions",
     async (req) => {
       core.access(auth(req), req.params.id, ["read", "manage"]);
-      return repo
-        .actors()
-        .map((actor) => ({
-          actor,
-          actions: repo.rights(req.params.id, actor.id),
-        }));
+      return repo.actors().map((actor) => ({
+        actor,
+        actions: repo.rights(req.params.id, actor.id),
+      }));
     },
   );
   app.put<{ Params: { id: string; actor_id: string }; Body: Grant }>(

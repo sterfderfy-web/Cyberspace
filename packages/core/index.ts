@@ -1,10 +1,10 @@
 import { randomUUID, createHash } from "node:crypto";
 import {
   permissions,
+  isNote,
+  type SpaceObject,
   type Actor,
   type Audit,
-  type Command,
-  type CommandResult,
   type ExportData,
   type Grant,
   type Note,
@@ -13,24 +13,28 @@ import {
   type Snapshot,
   type Space,
 } from "../contracts/index.js";
-import { applyNote } from "../module-notes/index.js";
-export class DomainError extends Error {
-  constructor(
-    public status: number,
-    public code: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import {
+  DomainError,
+  ModuleRegistry,
+  type ModuleCommand,
+  type ModuleDefinition,
+} from "../contracts/modules.js";
+import type { SpatialView, SceneSnapshot } from "../contracts/spatial.js";
+export { DomainError } from "../contracts/modules.js";
 export interface Repository {
   transaction<T>(work: () => T): T;
   space(id: string): Space | undefined;
   spaces(): Space[];
   saveSpace(space: Space): void;
-  objects(space: string): Note[];
-  object(id: string): Note | undefined;
-  saveObject(note: Note): void;
+  objects(space: string): SpaceObject[];
+  object(id: string): SpaceObject | undefined;
+  saveObject(object: SpaceObject): void;
+  views(space: string): SpatialView[];
+  view(id: string): SpatialView | undefined;
+  saveView(view: SpatialView): void;
+  deleteView(id: string): void;
+  sceneRevision(space: string): number;
+  bumpScene(space: string): number;
   actors(): Actor[];
   actor(id: string): Actor | undefined;
   rights(space: string, actor: string): Permission[];
@@ -72,7 +76,13 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 export class Core {
-  constructor(public repo: Repository) {}
+  readonly modules: ModuleRegistry;
+  constructor(
+    public repo: Repository,
+    modules: ModuleDefinition[] = [],
+  ) {
+    this.modules = new ModuleRegistry(modules);
+  }
   access(
     identity: Identity,
     spaceId: string,
@@ -90,8 +100,20 @@ export class Core {
     const space = this.access(identity, id);
     return {
       space,
-      objects: this.repo.objects(id),
+      objects: this.repo.objects(id).filter(isNote),
       cursor: space.revision,
+      permissions: this.repo.rights(id, identity.actor.id),
+    };
+  }
+  scene(identity: Identity, id: string): SceneSnapshot {
+    const space = this.access(identity, id);
+    return {
+      version: 0,
+      space,
+      scene_revision: this.repo.sceneRevision(id),
+      cursor: space.revision,
+      views: this.repo.views(id),
+      objects: this.repo.objects(id),
       permissions: this.repo.rights(id, identity.actor.id),
     };
   }
@@ -168,47 +190,65 @@ export class Core {
   command(
     identity: Identity,
     spaceId: string,
-    command: Command,
-  ): CommandResult {
+    command: ModuleCommand,
+  ): Record<string, unknown> {
+    const action = this.modules.action(command.module, command.action);
+    if (!action)
+      throw new DomainError(
+        400,
+        "UNKNOWN_ACTION",
+        "Неизвестное действие модуля",
+      );
     return this.mutate(
       identity,
       spaceId,
       command.request_id,
       command,
-      "notes." + command.action,
-      command.object_id ?? spaceId,
+      command.module + "." + command.action,
+      command.view_id ?? command.object_id ?? spaceId,
       () => {
-        this.access(identity, spaceId, ["read", "write", "execute"]);
+        this.access(identity, spaceId, [
+          "read",
+          ...action.required_permissions,
+        ]);
       },
       () => {
-        if (Buffer.byteLength(command.input.text, "utf8") > 65536)
-          return fail(413, "TOO_LARGE", "Текст превышает 64 КиБ UTF-8");
-        const previous =
-          command.action === "update_note"
-            ? this.repo.object(command.object_id!)
-            : undefined;
-        if (
-          command.action === "update_note" &&
-          (!previous || previous.space_id !== spaceId)
-        )
-          return fail(404, "NOT_FOUND", "Заметка недоступна");
-        if (previous && previous.revision !== command.expected_revision)
-          return fail(
-            409,
-            "REVISION_CONFLICT",
-            "Заметка уже изменена. Перечитайте её перед сохранением",
-          );
-        const object = applyNote(command, {
-          id: previous?.id ?? randomUUID(),
+        const result = action.execute(command, {
           spaceId,
-          previous,
           now: new Date().toISOString(),
+          newId: randomUUID,
+          object: (id) => {
+            const o = this.repo.object(id);
+            return o?.space_id === spaceId ? o : undefined;
+          },
+          saveObject: (o) => {
+            const prior = this.repo.object(o.id);
+            if (o.space_id !== spaceId || (prior && prior.space_id !== spaceId))
+              fail(403, "FORBIDDEN", "Объект принадлежит другому пространству");
+            this.repo.saveObject(o);
+          },
+          views: () => this.repo.views(spaceId),
+          saveView: (v) => {
+            const prior = this.repo.view(v.id);
+            if (v.space_id !== spaceId || (prior && prior.space_id !== spaceId))
+              fail(
+                403,
+                "FORBIDDEN",
+                "Представление принадлежит другому пространству",
+              );
+            this.repo.saveView(v);
+          },
+          deleteView: (id) => {
+            if (this.repo.view(id)?.space_id !== spaceId)
+              fail(404, "NOT_FOUND", "Представление недоступно");
+            this.repo.deleteView(id);
+          },
+          bumpScene: () => this.repo.bumpScene(spaceId),
         });
-        this.repo.saveObject(object);
         const space = this.bump(spaceId);
         return {
           request_id: command.request_id,
-          object,
+          ...result,
           space_revision: space.revision,
         };
       },
@@ -286,6 +326,7 @@ export class Core {
       space: { name: space.name },
       objects: this.repo
         .objects(id)
+        .filter(isNote)
         .map((n) => ({
           type: n.type,
           schema_version: n.schema_version,

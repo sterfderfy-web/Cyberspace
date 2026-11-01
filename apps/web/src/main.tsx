@@ -13,6 +13,7 @@ import type {
 } from "../../../packages/contracts/index.js";
 import { api, ApiError, requestId } from "./api.js";
 import "./style.css";
+const SpatialWorkspace = React.lazy(() => import("./spatial/Workspace.js"));
 const labels: Record<Permission, string> = {
   read: "Чтение",
   write: "Изменение",
@@ -38,7 +39,9 @@ function App() {
   const [connection, setConnection] = useState("Подключение"),
     [busy, setBusy] = useState(false),
     [pending, setPending] = useState<Command | null>(null);
-  const [panel, setPanel] = useState<"notes" | "access" | "audit">("notes"),
+  const [panel, setPanel] = useState<"notes" | "access" | "audit" | "spatial">(
+      "notes",
+    ),
     [rights, setRights] = useState<Rights>([]),
     [audit, setAudit] = useState<Audit[]>([]);
   const snapshotRef = useRef<Snapshot | null>(null);
@@ -114,13 +117,13 @@ function App() {
             if (e instanceof ApiError && e.status === 403) {
               setRights([]);
               setAudit([]);
-              setPanel("notes");
+              setPanel((p) => (p === "access" || p === "audit" ? "notes" : p));
             } else throw e;
           }
         } else {
           setRights([]);
           setAudit([]);
-          setPanel("notes");
+          setPanel((p) => (p === "access" || p === "audit" ? "notes" : p));
         }
       } catch (e) {
         if (activeSpace.current !== id) return;
@@ -451,6 +454,12 @@ function App() {
           </label>
           <nav>
             <button
+              className={panel === "spatial" ? "active" : ""}
+              onClick={() => setPanel("spatial")}
+            >
+              Пространственная область
+            </button>
+            <button
               className={panel === "notes" ? "active" : ""}
               onClick={() => setPanel("notes")}
             >
@@ -535,6 +544,18 @@ function App() {
             <p role="status" className="save-status">
               {status}
             </p>
+          )}
+          {panel === "spatial" && snapshot && (
+            <React.Suspense
+              fallback={<p>Загрузка пространственной области…</p>}
+            >
+              <SpatialWorkspace
+                key={`${actor.id}:${spaceId}`}
+                actorId={actor.id}
+                spaceId={spaceId}
+                spaces={spaces}
+              />
+            </React.Suspense>
           )}
           {panel === "notes" && snapshot && (
             <div className="notes-layout">
