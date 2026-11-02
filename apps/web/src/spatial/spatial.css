@@ -18,6 +18,7 @@
   margin-right: auto;
 }
 .spatial-canvas {
+  position: relative;
   height: 55vh;
   min-height: 300px;
   max-height: 720px;
@@ -25,6 +26,172 @@
   overflow: hidden;
   background: #10272e;
   touch-action: none;
+}
+.spatial-canvas > canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.document-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+.spatial-document {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: #f8f8f0;
+  border: 2px solid #79a99b;
+  color: #173e3f;
+  padding: 12px;
+  gap: 6px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.spatial-document[hidden] {
+  display: none;
+}
+.document-layer[data-interaction="edit"] .spatial-document {
+  pointer-events: auto;
+  user-select: text;
+}
+.document-handle {
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  color: #49665b;
+}
+.spatial-document label {
+  margin: 0;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.spatial-document input,
+.spatial-document textarea {
+  width: 100%;
+  font-size: 17px;
+  border: 1px solid #aac3b7;
+  padding: 6px;
+  background: #fff;
+  color: #173e3f;
+  border-radius: 4px;
+}
+.spatial-document .document-content {
+  flex: 1;
+  min-height: 0;
+}
+.spatial-document textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  line-height: 1.4;
+  touch-action: auto;
+  white-space: pre-wrap;
+}
+.document-actions {
+  display: flex;
+  gap: 6px;
+}
+.document-actions button {
+  font-size: 13px;
+  padding: 6px;
+}
+.spatial-document [role="status"] {
+  font-size: 12px;
+  min-height: 16px;
+}
+.spatial-toolbar [aria-pressed="true"],
+.comparison-toolbar [aria-pressed="true"] {
+  background: #c8e9d8;
+  border-color: #387661;
+}
+.comparison-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 15px 0;
+}
+.comparison-toolbar label {
+  max-width: 250px;
+}
+.diff-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.diff-scroll {
+  height: 300px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #b7d1c3;
+}
+.diff-row {
+  display: flex;
+  min-height: 24px;
+  line-height: 24px;
+}
+.diff-line {
+  position: sticky;
+  left: 0;
+  min-width: 40px;
+  background: #e9efeb;
+  color: #52645a;
+  padding: 0 4px;
+  font: 12px/24px monospace;
+}
+.diff-row pre {
+  font: 14px/24px monospace;
+  white-space: pre;
+  margin: 0;
+  padding: 0 4px;
+}
+.diff-added {
+  background: #b8e9c3;
+  color: #124222;
+}
+.diff-removed {
+  background: #ffcdcb;
+  color: #772121;
+  text-decoration: line-through;
+}
+.diff-row.changed {
+  background: #fff9e4;
+}
+.image-stage {
+  height: 300px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #10272e;
+  touch-action: none;
+}
+.image-stage canvas {
+  image-rendering: pixelated;
+}
+.image-comparison label {
+  display: inline-flex;
+  flex-direction: column;
+  margin: 8px;
+}
+.image-comparison {
+  margin: 20px 0;
+}
+.interaction-status {
+  font-size: 13px;
+  margin: 8px 0;
 }
 .spatial-canvas canvas {
   display: block;

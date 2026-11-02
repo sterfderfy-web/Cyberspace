@@ -12,7 +12,14 @@ import {
   type Transform,
 } from "../../../../packages/contracts/spatial.js";
 import { api, ApiError, requestId } from "../api.js";
-import { SpatialAdapter } from "./adapter.js";
+import {
+  SpatialAdapter,
+  type InteractionMode,
+  type ComparisonPlacement,
+} from "./adapter.js";
+import { SpatialDocuments, useDocumentEditors } from "./documents.js";
+import TextComparison from "./comparison/TextComparison.js";
+import ImageComparison from "./comparison/ImageComparison.js";
 import "./spatial.css";
 function read<T>(key: string, fallback: T): T {
   try {
@@ -66,6 +73,11 @@ export default function SpatialWorkspace({
   const key = `spatial:${actorId}:${spaceId}`,
     host = useRef<HTMLDivElement>(null),
     adapter = useRef<SpatialAdapter | null>(null);
+  const [graphics, setGraphics] = useState<SpatialAdapter | null>(null),
+    [mode, setMode] = useState<InteractionMode>("select"),
+    [multi, setMulti] = useState<string[]>([]),
+    [comparison, setComparison] = useState<ComparisonPlacement | null>(null),
+    [images, setImages] = useState(false);
   const [composition, setComposition] = useState<PersonalComposition>(() =>
     read(key + ":composition", {
       version: 0,
@@ -103,6 +115,25 @@ export default function SpatialWorkspace({
     setDraft(input(v));
   };
   const refreshRef = useRef<(id: string) => Promise<void>>(async () => {});
+  const editors = useDocumentEditors(scenes, (id) => refreshRef.current(id));
+  const views = Object.values(scenes).flatMap((s) => s.views);
+  const compareA = views.find((v) => v.id === comparison?.a),
+    compareB = views.find((v) => v.id === comparison?.b);
+  const compareActive = comparison && compareA && compareB ? comparison : null;
+  useEffect(() => {
+    const ids = new Set(views.map((v) => v.id));
+    setMulti((old) =>
+      old.every((id) => ids.has(id)) ? old : old.filter((id) => ids.has(id)),
+    );
+    if (comparison && (!ids.has(comparison.a) || !ids.has(comparison.b)))
+      setComparison(null);
+  }, [scenes]);
+  useEffect(() => {
+    graphics?.setMode(mode);
+  }, [graphics, mode]);
+  useEffect(() => {
+    graphics?.setComparison(compareActive);
+  }, [graphics, compareActive]);
   useEffect(() => {
     remember(key + ":composition", composition);
   }, [composition, key]);
@@ -131,12 +162,20 @@ export default function SpatialWorkspace({
       } catch (e) {
         if (!stopped && sequence[id] === request) {
           setError((e as Error).message);
-          if (e instanceof ApiError && [401, 403, 404].includes(e.status))
+          if (e instanceof ApiError && [401, 403, 404].includes(e.status)) {
+            setPending((old) => {
+              if (old?.space === id) {
+                remember(key + ":pending", null);
+                return null;
+              }
+              return old;
+            });
             setScenes((old) => {
               const next = { ...old };
               delete next[id];
               return next;
             });
+          }
         }
       }
     }
@@ -251,6 +290,7 @@ export default function SpatialWorkspace({
           error: setError,
         },
       );
+      setGraphics(adapter.current);
     } catch (e) {
       setError(
         `Графика недоступна: ${(e as Error).message}. Список и параметры View доступны ниже.`,
@@ -364,14 +404,29 @@ export default function SpatialWorkspace({
     >
       <div className="spatial-toolbar">
         <strong>Пространственная область</strong>
-        <button onClick={() => adapter.current?.setMode("select")}>
+        <button
+          aria-pressed={mode === "select"}
+          onClick={() => setMode("select")}
+        >
           Выбор / перемещение
         </button>
-        <button onClick={() => adapter.current?.setMode("pan")}>
+        <button aria-pressed={mode === "pan"} onClick={() => setMode("pan")}>
           Панорама
         </button>
-        <button onClick={() => adapter.current?.setMode("orbit")}>
+        <button
+          aria-pressed={mode === "orbit"}
+          onClick={() => setMode("orbit")}
+        >
           Орбита
+        </button>
+        <button aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>
+          Редактировать документы
+        </button>
+        <button
+          aria-pressed={mode === "scale"}
+          onClick={() => setMode("scale")}
+        >
+          Масштаб View
         </button>
         <button
           aria-label="Приблизить"
@@ -388,7 +443,98 @@ export default function SpatialWorkspace({
         <button onClick={() => adapter.current?.front()}>Спереди</button>
         <button onClick={() => adapter.current?.fit()}>Показать всё</button>
       </div>
-      <div ref={host} className="spatial-canvas" />
+      <p className="interaction-status" role="status">
+        Режим:{" "}
+        {
+          {
+            select: "перемещение панелей",
+            pan: "навигация",
+            orbit: "орбита",
+            edit: "редактирование текста",
+            scale: "масштаб панелей — тяните вправо/влево",
+          }[mode]
+        }
+      </p>
+      <div ref={host} className="spatial-canvas">
+        <SpatialDocuments
+          scenes={scenes}
+          excluded={composition.excluded_view_ids}
+          editors={editors}
+          adapter={graphics}
+          mode={mode}
+        />
+      </div>
+      <div className="comparison-toolbar">
+        <button
+          disabled={multi.length !== 2 || !!comparison}
+          onClick={() =>
+            setComparison({
+              a: multi[0],
+              b: multi[1],
+              alpha: 0.5,
+              show: "both",
+            })
+          }
+        >
+          Сравнить выбранные View
+        </button>
+        <span>Выбрано: {multi.length} · отметьте панели в списке</span>
+        <button onClick={() => setImages((v) => !v)}>
+          Сравнение изображений
+        </button>
+        {compareActive && (
+          <>
+            <label>
+              Прозрачность верхнего View
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step=".01"
+                value={compareActive.alpha}
+                onChange={(e) =>
+                  setComparison({
+                    ...compareActive,
+                    alpha: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+            {(["both", "a", "b"] as const).map((show) => (
+              <button
+                key={show}
+                aria-pressed={compareActive.show === show}
+                onClick={() => setComparison({ ...compareActive, show })}
+              >
+                {{ both: "Наложение", a: "Только A", b: "Только B" }[show]}
+              </button>
+            ))}
+            <button onClick={() => setComparison(null)}>
+              Завершить сравнение
+            </button>
+            <p>
+              Личная композиция сравнения: общий масштаб и положение. Исходные
+              View не изменены.
+            </p>
+          </>
+        )}
+      </div>
+      {compareActive &&
+        compareA &&
+        compareB &&
+        editors.drafts[compareA.object_id] &&
+        editors.drafts[compareB.object_id] && (
+          <TextComparison
+            key={compareA.id + compareB.id}
+            a={editors.drafts[compareA.object_id].text}
+            b={editors.drafts[compareB.object_id].text}
+            draft={
+              editors.drafts[compareA.object_id].dirty ||
+              editors.drafts[compareB.object_id].dirty
+            }
+          />
+        )}
+      {images && <ImageComparison />}
       <p className="muted">
         Перетащите панель для размещения. Колесо / жест двумя пальцами — масштаб
         камеры. Координаты в метрах; камера и скрытие «у меня» относятся только
@@ -500,6 +646,24 @@ export default function SpatialWorkspace({
           {Object.values(scenes).flatMap((s) =>
             s.views.map((v) => (
               <div className="view-row" key={v.id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={multi.includes(v.id)}
+                    disabled={
+                      !!comparison ||
+                      (!multi.includes(v.id) && multi.length >= 2)
+                    }
+                    onChange={(e) =>
+                      setMulti((ids) =>
+                        e.target.checked
+                          ? [...ids, v.id]
+                          : ids.filter((id) => id !== v.id),
+                      )
+                    }
+                  />
+                  Выбрать для сравнения
+                </label>
                 <button
                   aria-pressed={v.id === selected}
                   disabled={dirty || !!pending}
@@ -558,7 +722,13 @@ export default function SpatialWorkspace({
                 </p>
               )}
               <fieldset
-                disabled={!editable(base.space_id) || busy || !!pending}
+                disabled={
+                  !editable(base.space_id) ||
+                  busy ||
+                  !!pending ||
+                  base.id === compareActive?.a ||
+                  base.id === compareActive?.b
+                }
               >
                 <label>
                   Визуализатор

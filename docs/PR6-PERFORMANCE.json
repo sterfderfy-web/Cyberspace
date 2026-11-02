@@ -1,0 +1,49 @@
+{
+  "date": "2026-11-01T21:22:13.415Z",
+  "environment": {
+    "os": "win32",
+    "release": "10.0.26200",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13420H",
+    "browser": "156.0.4314.50",
+    "viewport": "1600x1100",
+    "headless": true,
+    "documents": 8,
+    "linesPerDocument": 80
+  },
+  "navigation": {
+    "renderedFrames": 1321,
+    "renderCallsFps": 165.04041678651987,
+    "frames": 1320,
+    "seconds": 7.999999999999999,
+    "rafFps": 165.00000000000003,
+    "frameP50Ms": 6.099999999999454,
+    "frameP95Ms": 6.399999999999636
+  },
+  "input": {
+    "samples": 12,
+    "inputToSecondRafP50Ms": 7,
+    "inputToSecondRafP95Ms": 10.400000005960464
+  },
+  "memory": {
+    "jsHeapBeforeBytes": 6347528,
+    "jsHeapAfterBytes": 7150404,
+    "jsHeapTransientBytes": 9053164,
+    "domBefore": {
+      "documents": 2,
+      "nodes": 2204,
+      "jsEventListeners": 310
+    },
+    "domAfter": {
+      "documents": 2,
+      "nodes": 2231,
+      "jsEventListeners": 312
+    }
+  },
+  "resources": {
+    "created": 8,
+    "disposed": 0,
+    "textureUpdates": 0,
+    "live": 8
+  },
+  "scope": "8 seconds rAF cadence and WebGL render-call count during wheel navigation; input event to second rAF; CDP JS heap before/after GC plus transient sample, not total RAM/VRAM or physical display FPS"
+}

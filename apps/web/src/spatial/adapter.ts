@@ -9,9 +9,23 @@ import type {
 } from "../../../../packages/contracts/spatial.js";
 import {
   worldMatrix,
+  localMatrix,
   effectiveAppearance,
 } from "../../../../packages/spatial-runtime/index.js";
-import { VisualizerRegistry, webVisualizers } from "./renderers.js";
+import {
+  VisualizerRegistry,
+  webVisualizers,
+  visualResources,
+  type VisualInstance,
+} from "./renderers.js";
+import { panelProjection } from "./projection.js";
+export type InteractionMode = "select" | "pan" | "orbit" | "edit" | "scale";
+export interface ComparisonPlacement {
+  a: string;
+  b: string;
+  alpha: number;
+  show: "both" | "a" | "b";
+}
 export interface SceneEntry {
   scene: SceneSnapshot;
   offset: Vec3;
@@ -23,10 +37,16 @@ export class SpatialAdapter {
   private controls: OrbitControls;
   private registry = new VisualizerRegistry(webVisualizers);
   private meshes: THREE.Mesh[] = [];
+  private instances = new Map<
+    string,
+    { renderer: string; visual: VisualInstance }
+  >();
+  private panels = new Map<string, HTMLElement>();
+  private comparison: ComparisonPlacement | null = null;
   private entries: SceneEntry[] = [];
   private resize: ResizeObserver;
   private selected: string | null = null;
-  private mode: "select" | "pan" | "orbit" = "select";
+  private mode: InteractionMode = "select";
   private stopped = false;
   private needsFrame = true;
   private drag?: {
@@ -39,11 +59,13 @@ export class SpatialAdapter {
     pointer: number;
     moved: boolean;
     transform: Transform;
+    startX: number;
     originals: { mesh: THREE.Mesh; matrix: THREE.Matrix4 }[];
   };
   private ray = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
   private frame = 0;
+  private frameStats = { rendered: 0 };
   private grid = new THREE.GridHelper(200, 100, 0x24575a, 0x1b363d);
   constructor(
     private host: HTMLElement,
@@ -55,6 +77,11 @@ export class SpatialAdapter {
       error: (message: string) => void;
     },
   ) {
+    // A counter for reproducible browser measurements; no DOM mutations per frame.
+    Object.defineProperty(host, "spatialFrameStats", {
+      value: this.frameStats,
+      configurable: true,
+    });
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.setClearColor(0x10272e);
@@ -79,6 +106,7 @@ export class SpatialAdapter {
     this.grid.rotation.x = Math.PI / 2;
     this.grid.position.z = -0.03;
     this.scene.add(this.grid);
+    (this.grid.material as THREE.Material).dispose();
     this.grid.material = new THREE.LineBasicMaterial({
       color: 0x27505a,
       transparent: true,
@@ -109,7 +137,9 @@ export class SpatialAdapter {
     const tick = () => {
       if (this.stopped) return;
       if (this.needsFrame) {
+        this.projectPanels();
         this.renderer.render(this.scene, this.camera);
+        this.frameStats.rendered++;
         this.needsFrame = false;
       }
       this.frame = requestAnimationFrame(tick);
@@ -137,7 +167,8 @@ export class SpatialAdapter {
       selected_view_id: this.selected,
     };
   }
-  setMode(mode: "select" | "pan" | "orbit") {
+  setMode(mode: InteractionMode) {
+    this.cancel();
     this.mode = mode;
     this.controls.enableRotate = mode === "orbit";
     this.controls.mouseButtons.LEFT =
@@ -146,13 +177,11 @@ export class SpatialAdapter {
       mode === "orbit" ? THREE.TOUCH.ROTATE : THREE.TOUCH.PAN;
   }
   private disposeMeshes() {
-    for (const mesh of this.meshes) {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-      const m = mesh.material as THREE.MeshBasicMaterial;
-      m.map?.dispose();
-      m.dispose();
+    for (const { visual } of this.instances.values()) {
+      this.scene.remove(visual.mesh);
+      visual.dispose();
     }
+    this.instances.clear();
     this.meshes = [];
   }
   select(id: string | null) {
@@ -172,14 +201,28 @@ export class SpatialAdapter {
     this.cancel();
     this.entries = entries;
     this.selected = selected;
-    this.disposeMeshes();
+    const retained = new Set<string>();
     for (const entry of entries)
       for (const view of entry.scene.views) {
         if (excluded.includes(view.id)) continue;
         const object = entry.scene.objects.find((o) => o.id === view.object_id);
         if (!object) continue;
-        const mesh = this.registry.create(object, view);
-        if (!mesh) continue;
+        retained.add(view.id);
+        const renderer = view.renderer_id + ":" + view.renderer_version;
+        let instance = this.instances.get(view.id);
+        if (instance?.renderer !== renderer) {
+          if (instance) {
+            this.scene.remove(instance.visual.mesh);
+            instance.visual.dispose();
+            this.instances.delete(view.id);
+          }
+          const visual = this.registry.create(object, view);
+          if (!visual) continue;
+          instance = { renderer, visual };
+          this.instances.set(view.id, instance);
+          this.scene.add(visual.mesh);
+        } else instance.visual.update(object, view);
+        const mesh = instance.visual.mesh;
         const appearance = effectiveAppearance(view, entry.scene.views);
         mesh.visible = appearance.visible;
         mesh.matrixAutoUpdate = false;
@@ -195,11 +238,27 @@ export class SpatialAdapter {
         material.opacity = appearance.opacity;
         material.color.set(view.id === selected ? 0xc4ffe6 : 0xffffff);
         mesh.renderOrder = view.layer * 20001 + view.order;
-        mesh.userData = { view, entry, canEdit: canEdit(view.space_id) };
-        this.scene.add(mesh);
-        this.meshes.push(mesh);
+        mesh.userData = {
+          view,
+          entry,
+          canEdit: canEdit(view.space_id),
+          baseMatrix: mesh.matrix.clone(),
+          appearance,
+        };
       }
+    for (const [id, { visual }] of this.instances)
+      if (!retained.has(id)) {
+        this.scene.remove(visual.mesh);
+        visual.dispose();
+        this.instances.delete(id);
+      }
+    this.meshes = [...this.instances.values()].map((i) => i.visual.mesh);
+    this.applyComparison();
     this.scene.updateMatrixWorld(true);
+    this.host.dataset.resources = JSON.stringify({
+      ...visualResources,
+      live: this.instances.size,
+    });
     this.needsFrame = true;
   }
   private point(e: PointerEvent) {
@@ -212,7 +271,7 @@ export class SpatialAdapter {
   }
   private down = (e: PointerEvent) => {
     if (this.drag) return;
-    if (this.mode !== "select" || e.button !== 0) return;
+    if (!["select", "scale"].includes(this.mode) || e.button !== 0) return;
     this.point(e);
     const hits = this.ray
       .intersectObjects(this.meshes)
@@ -232,7 +291,11 @@ export class SpatialAdapter {
     e.stopImmediatePropagation();
     this.controls.enabled = false;
     this.renderer.domElement.setPointerCapture(e.pointerId);
-    if (canEdit) {
+    if (
+      canEdit &&
+      view.id !== this.comparison?.a &&
+      view.id !== this.comparison?.b
+    ) {
       const normal = this.camera.getWorldDirection(new THREE.Vector3()),
         parent = new THREE.Matrix4().makeTranslation(
           entry.offset.x,
@@ -258,6 +321,7 @@ export class SpatialAdapter {
         pointer: e.pointerId,
         moved: false,
         transform: structuredClone(view.transform),
+        startX: e.clientX,
         originals: this.meshes
           .filter((candidate) => {
             let v: SpatialView | undefined = candidate.userData.view;
@@ -280,6 +344,29 @@ export class SpatialAdapter {
     const d = this.drag;
     if (!d || e.pointerId !== d.pointer) return;
     e.stopImmediatePropagation();
+    if (this.mode === "scale") {
+      const factor = Math.exp((e.clientX - d.startX) * 0.005),
+        original = d.view.transform.scale;
+      d.transform.scale = {
+        x: Math.min(1000, Math.max(0.001, original.x * factor)),
+        y: Math.min(1000, Math.max(0.001, original.y * factor)),
+        z: Math.min(1000, Math.max(0.001, original.z * factor)),
+      };
+      const next = d.parent
+          .clone()
+          .multiply(new THREE.Matrix4().fromArray(localMatrix(d.transform))),
+        change = next.multiply(
+          d.originals
+            .find((o) => o.mesh === d.mesh)!
+            .matrix.clone()
+            .invert(),
+        );
+      for (const o of d.originals)
+        o.mesh.matrix.copy(o.matrix).premultiply(change);
+      d.moved = true;
+      this.needsFrame = true;
+      return;
+    }
     this.point(e);
     const p = this.ray.ray.intersectPlane(d.plane, new THREE.Vector3());
     if (!p) return;
@@ -327,6 +414,88 @@ export class SpatialAdapter {
       .add(this.controls.target);
     this.controls.update();
     this.needsFrame = true;
+  }
+  bindPanel(id: string, element: HTMLElement | null) {
+    if (element) this.panels.set(id, element);
+    else this.panels.delete(id);
+    const mesh = this.instances.get(id)?.visual.mesh;
+    if (mesh) (mesh.material as THREE.Material).visible = !element;
+    this.needsFrame = true;
+  }
+  setComparison(value: ComparisonPlacement | null) {
+    this.cancel();
+    this.comparison = value;
+    this.applyComparison();
+    this.needsFrame = true;
+  }
+  private applyComparison() {
+    for (const mesh of this.meshes) {
+      mesh.matrix.copy(mesh.userData.baseMatrix);
+      mesh.visible = mesh.userData.appearance.visible;
+      mesh.renderOrder =
+        mesh.userData.view.layer * 20001 + mesh.userData.view.order;
+      (mesh.material as THREE.MeshBasicMaterial).opacity =
+        mesh.userData.appearance.opacity;
+    }
+    const c = this.comparison;
+    if (!c) return;
+    const a = this.instances.get(c.a)?.visual.mesh,
+      b = this.instances.get(c.b)?.visual.mesh;
+    if (!a || !b) return;
+    const av = a.userData.view as SpatialView,
+      bv = b.userData.view as SpatialView;
+    b.matrix
+      .copy(a.matrix)
+      .multiply(
+        new THREE.Matrix4().makeScale(
+          Number(av.config.width_m) / Number(bv.config.width_m),
+          Number(av.config.height_m) / Number(bv.config.height_m),
+          1,
+        ),
+      );
+    a.visible &&= c.show !== "b";
+    b.visible &&= c.show !== "a";
+    (b.material as THREE.MeshBasicMaterial).opacity =
+      c.show === "b" ? 1 : c.alpha;
+    b.renderOrder = a.renderOrder + 1;
+  }
+  private projectPanels() {
+    this.camera.updateMatrixWorld();
+    const ordered = [...this.meshes].sort(
+      (a, b) =>
+        a.renderOrder - b.renderOrder ||
+        new THREE.Vector3()
+          .setFromMatrixPosition(b.matrix)
+          .distanceToSquared(this.camera.position) -
+          new THREE.Vector3()
+            .setFromMatrixPosition(a.matrix)
+            .distanceToSquared(this.camera.position),
+    );
+    for (const [id, node] of this.panels) {
+      const mesh = this.instances.get(id)?.visual.mesh;
+      if (!mesh) {
+        node.hidden = true;
+        continue;
+      }
+      const view = mesh.userData.view as SpatialView;
+      const p = panelProjection(
+        mesh.matrix,
+        this.camera,
+        this.host.clientWidth,
+        this.host.clientHeight,
+        Number(view.config.width_m),
+        Number(view.config.height_m),
+      );
+      node.hidden = !mesh.visible || !p.visible;
+      node.style.width = p.width + "px";
+      node.style.height = p.height + "px";
+      node.style.transform = p.transform;
+      node.style.opacity = String(
+        (mesh.material as THREE.MeshBasicMaterial).opacity,
+      );
+      node.style.zIndex = String(ordered.indexOf(mesh) + 1);
+      (mesh.material as THREE.Material).visible = false;
+    }
   }
   pan(x: number, y: number) {
     const distance = this.camera.position.distanceTo(this.controls.target),
@@ -394,6 +563,11 @@ export class SpatialAdapter {
     c.removeEventListener("webglcontextlost", this.contextLost);
     this.controls.dispose();
     this.disposeMeshes();
+    this.panels.clear();
+    this.host.dataset.resources = JSON.stringify({
+      ...visualResources,
+      live: 0,
+    });
     this.grid.geometry.dispose();
     (this.grid.material as THREE.Material).dispose();
     this.renderer.dispose();
